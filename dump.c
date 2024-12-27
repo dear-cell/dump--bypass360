@@ -1,11 +1,12 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <tlhelp32.h>  
+#include <tlhelp32.h>
 
-#define BUFFER_SIZE 1024 * 1024 
+#define BUF_SIZE 1024 * 1024 
 
-BOOL DumpProcessMemory(DWORD processID, const char* outputFile);
+
+BOOL DumpProcessMemory(DWORD processID, const char* fileName);
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -17,7 +18,7 @@ int main(int argc, char* argv[]) {
 
     // 判断输入是进程名称还是进程ID
     if (strchr(argv[1], '.')) {
-        // 假设输入是进程名称，如 "123.exe"
+
         PROCESSENTRY32 pe;
         HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnap == INVALID_HANDLE_VALUE) {
@@ -28,15 +29,15 @@ int main(int argc, char* argv[]) {
         pe.dwSize = sizeof(PROCESSENTRY32);
         if (Process32First(hSnap, &pe)) {
             do {
-                if (strcmp(pe.szExeFile, argv[1]) == 0) {
+                if (_wcsicmp(pe.szExeFile, L"ToDesk.exe") == 0) {
                     processID = pe.th32ProcessID;
                     break;
                 }
             } while (Process32Next(hSnap, &pe));
         }
         CloseHandle(hSnap);
-    } else {
-        // 如果是进程ID
+    }
+    else {
         processID = atoi(argv[1]);
     }
 
@@ -45,27 +46,27 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // 调用函数获取进程内存并保存
+
     if (DumpProcessMemory(processID, "123.txt")) {
         printf("Memory dumped successfully to 123.txt\n");
-    } else {
+    }
+    else {
         printf("Failed to dump memory.\n");
     }
 
     return 0;
 }
 
-// 读取进程内存并保存到文件
-BOOL DumpProcessMemory(DWORD processID, const char* outputFile) {
+
+BOOL DumpProcessMemory(DWORD processID, const char* fileName) {
     HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, processID);
     if (hProcess == NULL) {
         printf("Error opening process %ld\n", processID);
         return FALSE;
     }
 
-    // 打开输出文件
-    FILE* file = fopen(outputFile, "wb");
-    if (file == NULL) {
+    FILE* outputFile = NULL;
+    if (fopen_s(&outputFile, fileName, "wb") != 0) {
         printf("Error opening output file.\n");
         CloseHandle(hProcess);
         return FALSE;
@@ -84,18 +85,19 @@ BOOL DumpProcessMemory(DWORD processID, const char* outputFile) {
                 if (buffer) {
                     SIZE_T bytesRead;
                     if (ReadProcessMemory(hProcess, lpBaseAddress, buffer, mbi.RegionSize, &bytesRead)) {
-                        fwrite(buffer, 1, bytesRead, file);
+                        fwrite(buffer, 1, bytesRead, outputFile);
                     }
                     free(buffer);
                 }
             }
             lpBaseAddress = (LPVOID)((BYTE*)lpBaseAddress + mbi.RegionSize);
-        } else {
+        }
+        else {
             break;
         }
     }
 
-    fclose(file);
+    fclose(outputFile);
     CloseHandle(hProcess);
     return TRUE;
 }
